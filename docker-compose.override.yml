@@ -1,0 +1,43 @@
+# ============================================================
+# 本地部署 override — behind gateway-cas Traefik
+# 子路径: /weknora (Traefik stripprefix)
+# 不开放任何宿主机端口,全部通过 Traefik 代理
+# ============================================================
+services:
+  # 前端: 构建 VITE_BASE_PATH=/weknora/, Traefik 路由
+  frontend:
+    build:
+      args:
+        VITE_BASE_PATH: /weknora/
+    ports: !reset []
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.weknora.rule=PathPrefix(`/weknora`)
+      - traefik.http.services.weknora.loadbalancer.server.port=80
+      - traefik.http.routers.weknora.middlewares=weknora-strip
+      - traefik.http.middlewares.weknora-strip.stripprefix.prefixes=/weknora
+    networks:
+      - WeKnora-network
+      - shared
+
+  # app: 不开放端口,仅 WeKnora-network 内部可达
+  app:
+    ports: !reset []
+    networks:
+      - WeKnora-network
+
+  # postgres: 不开放端口
+  postgres:
+    ports: !reset []
+
+  # minio: 不开放端口
+  minio:
+    ports: !reset []
+
+  # neo4j: 不开放端口
+  neo4j:
+    ports: !reset []
+
+networks:
+  shared:
+    external: true
