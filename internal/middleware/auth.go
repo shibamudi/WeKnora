@@ -138,7 +138,45 @@ func Auth(
 			return
 		}
 
-		// 检查请求是否在无需认证的API列表中
+// authenticateTrustedHeaders authenticates a request using headers injected by
+// an upstream reverse proxy (e.g. Traefik forwardAuth with CAS). When the
+// configured user-ID header is present, it finds (or auto-creates) the user
+// and delegates to authenticateJWTUser for tenant/role resolution.
+func authenticateTrustedHeaders(
+	c *gin.Context,
+	tenantService interfaces.TenantService,
+	userService interfaces.UserService,
+	memberService interfaces.TenantMemberService,
+	cfg *config.Config,
+) bool {
+	ctx := c.Request.Context()
+	th := cfg.Auth.TrustedHeaderAuth
+
+	userID := strings.TrimSpace(c.GetHeader(th.UserIDHeader))
+	if userID == "" {
+		return false
+	}
+	if err := validateExternalUserID(userID); err != nil {
+		logger.Warnf(ctx, "[auth] trusted header rejected: %v", err)
+		return false
+	}
+
+	userName := strings.TrimSpace(c.GetHeader(th.UserNameHeader))
+
+	user, err := userService.FindOrCreateTrustedHeaderUser(ctx, userID, userName)
+	if err != nil || user == nil || !user.IsActive {
+		logger.Warnf(ctx, "[auth] trusted header user resolution failed: user=%s err=%v", userID, err)
+		return false
+	}
+
+	// Strip credential headers so downstream code cannot be confused by them.
+	c.Request.Header.Del("Authorization")
+	c.Request.Header.Del("X-API-Key")
+
+	return authenticateJWTUser(c, tenantService, memberService, cfg, user, 0)
+}
+
+// 检查请求是否在无需认证的API列表中
 		if isNoAuthAPI(c.Request.URL.Path, c.Request.Method) {
 			c.Next()
 			return
@@ -152,6 +190,14 @@ func Auth(
 				c.Next()
 			}
 			return
+		}
+
+		// 尝试可信头部认证（Traefik forwardAuth 等反向代理注入）
+		if cfg.Auth != nil && cfg.Auth.TrustedHeaderAuth != nil && cfg.Auth.TrustedHeaderAuth.Enabled {
+			if authenticateTrustedHeaders(c, tenantService, userService, memberService, cfg) {
+				c.Next()
+				return
+			}
 		}
 
 		// 尝试JWT Token认证

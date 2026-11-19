@@ -331,6 +331,24 @@ type AuthConfig struct {
 	// explicit self-service tenant creation.
 	DefaultTenantMode      string `yaml:"default_tenant_mode" json:"default_tenant_mode"`
 	ComplexPasswordEnabled bool   `yaml:"complex_password_enabled" json:"complex_password_enabled"`
+	// DisableLocalLogin blocks POST /auth/login (password-based login).
+	// Use with TrustedHeaderAuth to enforce a single sign-on entry point.
+	DisableLocalLogin bool `yaml:"disable_local_login" json:"disable_local_login"`
+	// TrustedHeaderAuth enables authentication via headers injected by an
+	// external reverse proxy (e.g. Traefik forwardAuth with CAS/OIDC).
+	TrustedHeaderAuth *TrustedHeaderAuthConfig `yaml:"trusted_header_auth" json:"trusted_header_auth"`
+}
+
+// TrustedHeaderAuthConfig configures trusted-header authentication. When
+// enabled, the Auth middleware reads the configured headers (injected by an
+// upstream proxy) and auto-provisions users on first sight.
+type TrustedHeaderAuthConfig struct {
+	Enabled           bool   `yaml:"enabled" json:"enabled"`
+	UserIDHeader      string `yaml:"user_id_header" json:"user_id_header"`
+	UserNameHeader    string `yaml:"user_name_header" json:"user_name_header"`
+	EmailDomain       string `yaml:"email_domain" json:"email_domain"`
+	AutoCreateUser    bool   `yaml:"auto_create_user" json:"auto_create_user"`
+	DefaultTenantMode string `yaml:"default_tenant_mode" json:"default_tenant_mode"`
 }
 
 // AuthRegistrationMode constants used by handlers and middleware.
@@ -989,6 +1007,49 @@ func applyAuthAndTenantDefaults(cfg *Config) {
 				value,
 			)
 		}
+	}
+
+	// Disable local password login.
+	if value := strings.TrimSpace(os.Getenv("WEKNORA_AUTH_DISABLE_LOCAL_LOGIN")); value != "" {
+		cfg.Auth.DisableLocalLogin = strings.EqualFold(value, "true")
+	}
+
+	// Trusted-header authentication (reverse-proxy forwardAuth).
+	if cfg.Auth.TrustedHeaderAuth == nil {
+		cfg.Auth.TrustedHeaderAuth = &TrustedHeaderAuthConfig{}
+	}
+	th := cfg.Auth.TrustedHeaderAuth
+	if value := strings.TrimSpace(os.Getenv("WEKNORA_TRUSTED_HEADER_AUTH_ENABLED")); value != "" {
+		th.Enabled = strings.EqualFold(value, "true")
+	}
+	if value := strings.TrimSpace(os.Getenv("WEKNORA_TRUSTED_HEADER_AUTH_USER_ID_HEADER")); value != "" {
+		th.UserIDHeader = value
+	}
+	if th.UserIDHeader == "" {
+		th.UserIDHeader = "X-User-Id"
+	}
+	if value := strings.TrimSpace(os.Getenv("WEKNORA_TRUSTED_HEADER_AUTH_USER_NAME_HEADER")); value != "" {
+		th.UserNameHeader = value
+	}
+	if th.UserNameHeader == "" {
+		th.UserNameHeader = "X-User-Name"
+	}
+	if value := strings.TrimSpace(os.Getenv("WEKNORA_TRUSTED_HEADER_AUTH_EMAIL_DOMAIN")); value != "" {
+		th.EmailDomain = value
+	}
+	if th.EmailDomain == "" {
+		th.EmailDomain = "trusted.local"
+	}
+	if value := strings.TrimSpace(os.Getenv("WEKNORA_TRUSTED_HEADER_AUTH_AUTO_CREATE_USER")); value != "" {
+		th.AutoCreateUser = strings.EqualFold(value, "true")
+	} else if th.Enabled {
+		th.AutoCreateUser = true
+	}
+	if value := strings.TrimSpace(os.Getenv("WEKNORA_TRUSTED_HEADER_AUTH_DEFAULT_TENANT_MODE")); value != "" {
+		th.DefaultTenantMode = value
+	}
+	if th.DefaultTenantMode == "" {
+		th.DefaultTenantMode = AuthDefaultTenantModeCreatePersonal
 	}
 }
 

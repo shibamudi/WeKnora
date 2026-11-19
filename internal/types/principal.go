@@ -226,6 +226,7 @@ const (
 	AuthSourceEmbed           = "embed"
 	AuthSourceIM              = "im"
 	AuthSourceMCPEndpoint     = "mcp_endpoint"
+	AuthSourceTrustedHeader   = "trusted_header"
 	AuthSourceInternal        = "internal"
 	AuthSourceUnknown         = "unknown"
 )

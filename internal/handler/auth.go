@@ -260,6 +260,11 @@ func (h *AuthHandler) Register(c *gin.Context) {
 func (h *AuthHandler) Login(c *gin.Context) {
 	ctx := c.Request.Context()
 
+	if h.configInfo != nil && h.configInfo.Auth != nil && h.configInfo.Auth.DisableLocalLogin {
+		_ = c.Error(errors.NewForbiddenError("Local login is disabled"))
+		return
+	}
+
 	logger.Info(ctx, "Start user login")
 
 	var req types.LoginRequest
@@ -861,10 +866,22 @@ func (h *AuthHandler) GetAuthConfig(c *gin.Context) {
 		h.configInfo,
 		h.systemSettingSvc,
 	)
+
+	localLoginEnabled := true
+	trustedHeaderAuthEnabled := false
+	if h.configInfo != nil && h.configInfo.Auth != nil {
+		localLoginEnabled = !h.configInfo.Auth.DisableLocalLogin
+		if h.configInfo.Auth.TrustedHeaderAuth != nil {
+			trustedHeaderAuthEnabled = h.configInfo.Auth.TrustedHeaderAuth.Enabled
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"success":                  true,
-		"registration_mode":        mode,
-		"complex_password_enabled": complexPasswordEnabled,
+		"success":                     true,
+		"registration_mode":           mode,
+		"complex_password_enabled":    complexPasswordEnabled,
+		"local_login_enabled":         localLoginEnabled,
+		"trusted_header_auth_enabled": trustedHeaderAuthEnabled,
 	})
 }
 

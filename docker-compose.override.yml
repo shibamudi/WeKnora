@@ -1,10 +1,10 @@
 # ============================================================
 # 本地部署 override — behind gateway-cas Traefik
 # 子路径: /weknora (Traefik stripprefix)
+# CAS 认证: cas-auth@docker (SPA + API), MCP 路由除外
 # 不开放任何宿主机端口,全部通过 Traefik 代理
 # ============================================================
 services:
-  # 前端: 构建 VITE_BASE_PATH=/weknora/, Traefik 路由
   frontend:
     build:
       args:
@@ -12,29 +12,31 @@ services:
     ports: !reset []
     labels:
       - traefik.enable=true
+      # MCP 路由: 不走 CAS 认证 (MCP 有自己的 Bearer token)
+      - traefik.http.routers.weknora-mcp.rule=PathPrefix(`/weknora/mcp`)
+      - traefik.http.routers.weknora-mcp.service=weknora-svc
+      - traefik.http.routers.weknora-mcp.middlewares=weknora-strip
+      # 其余路由: CAS 认证 + strip /weknora 前缀
       - traefik.http.routers.weknora.rule=PathPrefix(`/weknora`)
-      - traefik.http.services.weknora.loadbalancer.server.port=80
-      - traefik.http.routers.weknora.middlewares=weknora-strip
+      - traefik.http.services.weknora-svc.loadbalancer.server.port=80
+      - traefik.http.routers.weknora.service=weknora-svc
+      - traefik.http.routers.weknora.middlewares=cas-auth@docker,weknora-strip
       - traefik.http.middlewares.weknora-strip.stripprefix.prefixes=/weknora
     networks:
       - WeKnora-network
       - shared
 
-  # app: 不开放端口,仅 WeKnora-network 内部可达
   app:
     ports: !reset []
     networks:
       - WeKnora-network
 
-  # postgres: 不开放端口
   postgres:
     ports: !reset []
 
-  # minio: 不开放端口
   minio:
     ports: !reset []
 
-  # neo4j: 不开放端口
   neo4j:
     ports: !reset []
 

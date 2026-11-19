@@ -32,6 +32,10 @@ type UserService interface {
 	GetUserByEmail(ctx context.Context, email string) (*types.User, error)
 	// GetUserByUsername gets a user by username
 	GetUserByUsername(ctx context.Context, username string) (*types.User, error)
+	// FindOrCreateTrustedHeaderUser finds a user by the external user ID
+	// (from a trusted proxy header). If not found and auto-create is enabled,
+	// a new user is provisioned with a synthetic email and random password.
+	FindOrCreateTrustedHeaderUser(ctx context.Context, userID, userName string) (*types.User, error)
 	// GetUserByTenantID gets the first user (owner) of a tenant
 	GetUserByTenantID(ctx context.Context, tenantID uint64) (*types.User, error)
 	// UpdateUser updates user data without changing account status; use SetUserActive for that.

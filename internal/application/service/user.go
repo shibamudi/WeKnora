@@ -1896,6 +1896,60 @@ func (s *userService) provisionOIDCUser(
 	return user, nil
 }
 
+// FindOrCreateTrustedHeaderUser resolves a user identity injected by an
+// upstream reverse proxy (Traefik forwardAuth / CAS). The userID comes from
+// the configured header (default X-User-Id). If the user doesn't exist and
+// auto-create is enabled, a new account is provisioned with a synthetic
+// email ({userID}@{emailDomain}) and a random password the user will never
+// know — mirroring the OIDC auto-provision pattern.
+func (s *userService) FindOrCreateTrustedHeaderUser(
+	ctx context.Context,
+	userID, userName string,
+) (*types.User, error) {
+	user, _ := s.userRepo.GetUserByUsername(ctx, userID)
+	if user != nil && user.IsActive {
+		return user, nil
+	}
+
+	th := s.config.Auth.TrustedHeaderAuth
+	if th == nil || !th.AutoCreateUser {
+		return nil, fmt.Errorf("trusted header user %q not found and auto-create is disabled", userID)
+	}
+
+	emailDomain := th.EmailDomain
+	if emailDomain == "" {
+		emailDomain = "trusted.local"
+	}
+	email := userID + "@" + emailDomain
+
+	// If the synthetic email already exists (e.g. username was changed),
+	// reuse that account.
+	if existing, _ := s.userRepo.GetUserByEmail(ctx, email); existing != nil {
+		return existing, nil
+	}
+
+	provisioning := types.TenantProvisioningCreatePersonal
+	if th.DefaultTenantMode == config.AuthDefaultTenantModeTenantless {
+		provisioning = types.TenantProvisioningTenantless
+	}
+
+	randomPassword, err := generateRandomString(32)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate password for trusted header user: %w", err)
+	}
+
+	user, err = s.Register(ctx, &types.RegisterRequest{
+		Username:           userID,
+		Email:              email,
+		Password:           randomPassword,
+		TenantProvisioning: provisioning,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to auto-provision trusted header user %q: %w", userID, err)
+	}
+	return user, nil
+}
+
 func (s *userService) generateOIDCUsername(ctx context.Context, info *types.OIDCUserInfo) string {
 	base := sanitizeUsernameCandidate(info.Username)
 	if base == "" {
