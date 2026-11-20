@@ -509,6 +509,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onUnmounted, reactive, ref, watch } from 'vue'
+import { getApiBaseUrl } from '@/utils/api-base'
 import { useI18n } from 'vue-i18n'
 import { MessagePlugin } from 'tdesign-vue-next'
 import SettingDrawer from '@/components/settings/SettingDrawer.vue'
@@ -1324,7 +1325,7 @@ function absoluteInviteURL(raw: string): string {
   if (!raw) return ''
   if (/^https?:\/\//i.test(raw)) return raw
   const origin = (typeof window !== 'undefined' && window.location && window.location.origin) || ''
-  return raw.startsWith('/') ? origin + raw : origin + '/' + raw
+  return raw.startsWith('/') ? origin + getApiBaseUrl() + raw : origin + '/' + raw
 }
 
 async function copyText(text: string) {

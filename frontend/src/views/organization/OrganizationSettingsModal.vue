@@ -751,6 +751,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
+import { getApiBaseUrl } from '@/utils/api-base'
 import { useRouter } from 'vue-router'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { useModalShell } from '@/composables/useModalShell'
@@ -1211,7 +1212,7 @@ const isOwnerMember = (member: OrganizationMember): boolean => {
 
 const inviteLink = computed(() => {
   if (!inviteCode.value) return ''
-  return `${window.location.origin}/join?code=${inviteCode.value}`
+  return `${window.location.origin}${getApiBaseUrl()}/join?code=${inviteCode.value}`
 })
 
 const inviteValidityOptions = computed(() => [
