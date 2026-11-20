@@ -247,7 +247,7 @@ func (h *MCPOAuthHandler) Callback(c *gin.Context) {
 	code := strings.TrimSpace(c.Query("code"))
 	providerErr := strings.TrimSpace(c.Query("error"))
 
-	const fallbackRedirect = "/"
+	fallbackRedirect := frontendBaseURLFor(nil) + "/"
 
 	if providerErr != "" {
 		c.Redirect(http.StatusFound, fallbackRedirect+"#mcp_oauth_error="+urlQueryEscape(providerErr))
