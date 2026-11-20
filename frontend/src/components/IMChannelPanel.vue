@@ -588,6 +588,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch, onUnmounted, computed } from 'vue';
+import { getApiBaseUrl } from '@/utils/api-base';
 import { useI18n } from 'vue-i18n';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { copyWithToast } from '@/utils/clipboard';
@@ -957,8 +958,7 @@ async function loadChannels() {
 }
 
 function getCallbackUrl(channel: IMChannel): string {
-  const base = window.location.origin;
-  return `${base}/api/v1/im/callback/${channel.id}`;
+  return `${window.location.origin}${getApiBaseUrl()}/api/v1/im/callback/${channel.id}`;
 }
 
 async function copyUrl(channel: IMChannel) {
