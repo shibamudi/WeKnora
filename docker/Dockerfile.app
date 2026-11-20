@@ -7,9 +7,6 @@ ARG APK_MIRROR_ARG
 # Debian source before swapping in a mirror: mirrors.tencent.com redirects
 # apt to HTTPS, and that handshake fails without a trust store.
 RUN if [ -n "$APK_MIRROR_ARG" ]; then \
-        apt-get update && \
-        apt-get install -y --no-install-recommends ca-certificates && \
-        rm -rf /var/lib/apt/lists/* && \
         sed -i "s@deb.debian.org@${APK_MIRROR_ARG}@g" /etc/apt/sources.list.d/debian.sources; \
     fi && \
     apt-get update && \
