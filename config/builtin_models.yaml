@@ -1,0 +1,59 @@
+builtin_models:
+  - id: builtin-llm-default
+    type: KnowledgeQA
+    source: remote
+    is_default: true
+    name: ${LLM_MODEL_NAME}
+    parameters:
+      base_url: ${LLM_BASE_URL}
+      api_key: ${LLM_API_KEY}
+      provider: openai
+
+  - id: builtin-llm-qwen37-plus
+    type: KnowledgeQA
+    source: remote
+    name: Ali-dashscope/Qwen3.7-Plus
+    parameters:
+      base_url: ${LLM_BASE_URL}
+      api_key: ${LLM_API_KEY}
+      provider: openai
+
+  - id: builtin-llm-deepseek-v32
+    type: KnowledgeQA
+    source: remote
+    name: Ali-dashscope/DeepSeek-V3.2
+    parameters:
+      base_url: ${LLM_BASE_URL}
+      api_key: ${LLM_API_KEY}
+      provider: openai
+
+  - id: builtin-llm-doubao-pro
+    type: KnowledgeQA
+    source: remote
+    name: ByteDance-volcengine/Doubao-Seed-2.0-pro
+    parameters:
+      base_url: ${LLM_BASE_URL}
+      api_key: ${LLM_API_KEY}
+      provider: openai
+
+  - id: builtin-embedding-default
+    type: Embedding
+    source: remote
+    is_default: true
+    name: ${EMBEDDING_MODEL_NAME}
+    parameters:
+      base_url: ${EMBEDDING_BASE_URL}
+      api_key: ${EMBEDDING_API_KEY}
+      provider: openai
+      embedding_parameters:
+        dimension: 1024
+
+  - id: builtin-rerank-default
+    type: Rerank
+    source: remote
+    is_default: true
+    name: ${RERANK_MODEL_NAME}
+    parameters:
+      base_url: ${RERANK_BASE_URL}
+      api_key: ${RERANK_API_KEY}
+      provider: generic

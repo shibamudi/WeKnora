@@ -66,6 +66,8 @@ services:
       args:
         GOPROXY_ARG: https://goproxy.cn
     ports: !reset []
+    volumes:
+      - ./config/builtin_models.yaml:/app/config/builtin_models.yaml:ro
     networks:
       - WeKnora-network
 
