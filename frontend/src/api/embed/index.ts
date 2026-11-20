@@ -606,14 +606,14 @@ function escapeHtmlAttr(value: string): string {
 
 /** Validate that a base URL is a well-formed http(s) origin; fall back otherwise. */
 function safeBaseUrl(raw?: string): string {
-  const fallback = window.location.origin
-  if (!raw) return fallback
+  if (!raw) return resolveEmbedBaseUrl()
   try {
     const u = new URL(raw, window.location.href)
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') return fallback
-    return u.origin
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return resolveEmbedBaseUrl()
+    const path = u.pathname !== '/' ? u.pathname.replace(/\/+$/, '') : ''
+    return u.origin + path
   } catch {
-    return fallback
+    return resolveEmbedBaseUrl()
   }
 }
 
