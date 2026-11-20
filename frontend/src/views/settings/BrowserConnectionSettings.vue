@@ -166,6 +166,7 @@
 </template>
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
+import { getApiBaseUrl } from '@/utils/api-base'
 import { useI18n } from 'vue-i18n'
 import { get, post, getDown } from '@/utils/request'
 import { pairingPageOrigin, preferredDesktopAPIBase } from '@/utils/browserPairingOrigin'
@@ -242,7 +243,7 @@ async function pair() {
   busy.value = true; error.value = ''; revision++
   try {
     if (!pairing.value || Date.now() >= pairExpires) {
-      const origin = pairingPageOrigin(window.location.origin, await desktopApiBase())
+      const origin = pairingPageOrigin(window.location.origin + getApiBaseUrl(), await desktopApiBase())
       const result = await post<{ data: { pairing_link: string } }>(endpoint, { action: 'pair', origin }, { timeout: 15000, signal: controller.signal })
       if (!alive) return
       pairing.value = result.data.pairing_link; pairExpires = Date.now() + 5 * 60 * 1000

@@ -214,10 +214,11 @@ func (m *Manager) pairingURL(origin string) (string, error) {
 		return pairingEndpoint(m.publicURL)
 	}
 	u, err := url.Parse(origin)
-	if err != nil || u.Host == "" || u.User != nil || u.Path != "" ||
+	if err != nil || u.Host == "" || u.User != nil ||
 		u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
 		return "", errors.New("invalid BrowserSkill page origin")
 	}
+	basePath := strings.TrimRight(u.Path, "/")
 	switch u.Scheme {
 	case "https":
 		u.Scheme = "wss"
@@ -226,7 +227,7 @@ func (m *Manager) pairingURL(origin string) (string, error) {
 	default:
 		return "", errors.New("BrowserSkill page origin requires HTTP or HTTPS")
 	}
-	u.Path = "/api/v1/local-browser/extension"
+	u.Path = basePath + "/api/v1/local-browser/extension"
 	return pairingEndpoint(u.String())
 }
 

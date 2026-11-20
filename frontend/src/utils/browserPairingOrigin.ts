@@ -20,7 +20,7 @@ export function pairingPageOrigin(pageOrigin: string, apiBase?: string): string 
   try {
     const page = new URL(pageOrigin)
     if (page.protocol === 'http:' || page.protocol === 'https:') {
-      return page.origin
+      return page.origin + (page.pathname !== '/' ? page.pathname.replace(/\/+$/, '') : '')
     }
   } catch {
     /* custom schemes and empty origins fall through */
