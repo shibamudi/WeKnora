@@ -381,6 +381,7 @@
 
 <script setup lang="ts">
 import { ref, watch, computed, onBeforeUnmount } from 'vue'
+import { getApiBaseUrl } from '@/utils/api-base'
 import { MessagePlugin } from 'tdesign-vue-next'
 import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next'
 import { useI18n } from 'vue-i18n'
@@ -687,11 +688,8 @@ async function startAuthorize(serviceId: string) {
   const generation = oauthGeneration
   oauthAuthorizing.value = true
   try {
-    const redirectUri = window.location.origin + MCP_OAUTH_CALLBACK_PATH
-    // After the backend completes the exchange it bounces the popup here. The
-    // app root is harmless; the popup is closed by the opener below once the
-    // authorization status flips, so this page is only shown briefly.
-    const frontendRedirect = '/'
+    const redirectUri = window.location.origin + getApiBaseUrl() + MCP_OAUTH_CALLBACK_PATH
+    const frontendRedirect = getApiBaseUrl() + '/'
     const authorization = await getMCPOAuthAuthorizeURL(serviceId, {
       redirect_uri: redirectUri,
       frontend_redirect: frontendRedirect,
