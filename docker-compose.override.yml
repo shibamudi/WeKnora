@@ -1,7 +1,7 @@
 # ============================================================
 # 本地部署 override — behind gateway-cas Traefik
 # 子路径: /weknora (Traefik stripprefix)
-# CAS 认证: cas-auth@docker (SPA + API), MCP 路由除外
+# 路由策略: 自带凭证/签名的路径豁免 CAS, 其余(浏览器)走 cas-auth
 # 不开放任何宿主机端口,全部通过 Traefik 代理
 # ============================================================
 services:
@@ -12,12 +12,47 @@ services:
     ports: !reset []
     labels:
       - traefik.enable=true
-      # MCP 路由: 不走 CAS 认证 (MCP 有自己的 Bearer token)
+      # 机器客户端 API: X-API-Key 自带凭证, WeKnora 自认证, 不走 CAS。
+      # 刻意不匹配 Authorization: 浏览器 request.ts 会附加 localStorage
+      # 残留的旧 JWT, 匹配它会让 SPA 绕过 CAS 以旧账号(或 401)认证。
+      - traefik.http.routers.weknora-machine-api.rule=PathPrefix(`/weknora/api`) && HeaderRegexp(`X-API-Key`, `.+`)
+      - traefik.http.routers.weknora-machine-api.service=weknora-svc
+      - traefik.http.routers.weknora-machine-api.middlewares=weknora-strip
+      # IM 平台回调: webhook, 平台签名自证
+      - traefik.http.routers.weknora-im.rule=PathPrefix(`/weknora/api/v1/im/callback`)
+      - traefik.http.routers.weknora-im.service=weknora-svc
+      - traefik.http.routers.weknora-im.middlewares=weknora-strip
+      # 预签名文件 URL: HMAC 签名自证 (IM 取图)
+      - traefik.http.routers.weknora-presigned.rule=Path(`/weknora/api/v1/files/presigned`)
+      - traefik.http.routers.weknora-presigned.service=weknora-svc
+      - traefik.http.routers.weknora-presigned.middlewares=weknora-strip
+      # 短时资源链接 /r/<token>
+      - traefik.http.routers.weknora-grants.rule=PathPrefix(`/weknora/r/`)
+      - traefik.http.routers.weknora-grants.service=weknora-svc
+      - traefik.http.routers.weknora-grants.middlewares=weknora-strip
+      # Embed 会话 API (Embed token 自证) + 帧策略
+      - traefik.http.routers.weknora-embed-api.rule=PathPrefix(`/weknora/api/v1/embed`) || Path(`/weknora/api/v1/embed-frame-policy`)
+      - traefik.http.routers.weknora-embed-api.service=weknora-svc
+      - traefik.http.routers.weknora-embed-api.middlewares=weknora-strip
+      # Embed 静态资源: 第三方匿名访客 (页面/脚本/运行时配置/构建产物/图标)
+      - traefik.http.routers.weknora-embed-static.rule=PathPrefix(`/weknora/embed/`) || Path(`/weknora/weknora-widget.js`) || Path(`/weknora/config.js`) || PathPrefix(`/weknora/assets/`) || PathPrefix(`/weknora/tdesign-icons/`)
+      - traefik.http.routers.weknora-embed-static.service=weknora-svc
+      - traefik.http.routers.weknora-embed-static.middlewares=weknora-strip
+      # BrowserSkill 扩展: WS 配对/设备 token
+      - traefik.http.routers.weknora-browserskill.rule=PathPrefix(`/weknora/api/v1/local-browser/extension`)
+      - traefik.http.routers.weknora-browserskill.service=weknora-svc
+      - traefik.http.routers.weknora-browserskill.middlewares=weknora-strip
+      # MCP OAuth 回调: 第三方重定向, state 一次性自证
+      - traefik.http.routers.weknora-mcp-oauth.rule=Path(`/weknora/api/v1/mcp-oauth/callback`)
+      - traefik.http.routers.weknora-mcp-oauth.service=weknora-svc
+      - traefik.http.routers.weknora-mcp-oauth.middlewares=weknora-strip
+      # MCP: 自带 Bearer token 认证
       - traefik.http.routers.weknora-mcp.rule=PathPrefix(`/weknora/mcp`)
       - traefik.http.routers.weknora-mcp.service=weknora-svc
       - traefik.http.routers.weknora-mcp.middlewares=weknora-strip
-      # 其余路由: CAS 认证 + strip /weknora 前缀
+      # 主路由: 其余全部走 CAS (浏览器), 显式最低优先级保底
       - traefik.http.routers.weknora.rule=PathPrefix(`/weknora`)
+      - traefik.http.routers.weknora.priority=1
       - traefik.http.services.weknora-svc.loadbalancer.server.port=80
       - traefik.http.routers.weknora.service=weknora-svc
       - traefik.http.routers.weknora.middlewares=cas-auth@docker,weknora-strip
