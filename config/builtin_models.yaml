@@ -36,6 +36,15 @@ builtin_models:
       api_key: ${LLM_API_KEY}
       provider: openai
 
+  - id: builtin-llm-flash
+    type: KnowledgeQA
+    source: remote
+    name: Ali-dashscope/Qwen3.6-Flash
+    parameters:
+      base_url: ${LLM_BASE_URL}
+      api_key: ${LLM_API_KEY}
+      provider: openai
+
   - id: builtin-embedding-default
     type: Embedding
     source: remote
