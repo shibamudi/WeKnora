@@ -23,18 +23,19 @@ type ListTenantsParams struct {
 
 // tenantService implements the TenantService interface
 type tenantService struct {
-	repo        interfaces.TenantRepository // Repository for tenant data operations
+	repo        interfaces.TenantRepository
 	storageRepo interfaces.StorageBackendRepository
 	settings    interfaces.SystemSettingService
+	modelRepo   interfaces.ModelRepository
 }
 
-// NewTenantService creates a new tenant service instance
 func NewTenantService(
 	repo interfaces.TenantRepository,
 	storageRepo interfaces.StorageBackendRepository,
 	settings interfaces.SystemSettingService,
+	modelRepo interfaces.ModelRepository,
 ) interfaces.TenantService {
-	return &tenantService{repo: repo, storageRepo: storageRepo, settings: settings}
+	return &tenantService{repo: repo, storageRepo: storageRepo, settings: settings, modelRepo: modelRepo}
 }
 
 // CreateTenant creates a new tenant
@@ -81,7 +82,61 @@ func (s *tenantService) CreateTenant(ctx context.Context, tenant *types.Tenant) 
 	}
 
 	logger.Infof(ctx, "Tenant created successfully, ID: %d, name: %s", tenant.ID, tenant.Name)
+
+	s.populateDefaultModelSettings(ctx, tenant)
+
 	return tenant, nil
+}
+
+// populateDefaultModelSettings queries builtin models flagged is_default=true
+// and writes their IDs into the tenant's DefaultSettings so that new
+// workspaces are immediately usable (KB creation → embedding, chat → LLM,
+// summary → utility) without manual configuration. Admins can override
+// via the workspace settings page afterwards.
+func (s *tenantService) populateDefaultModelSettings(ctx context.Context, tenant *types.Tenant) {
+	if s.modelRepo == nil || tenant == nil || tenant.ID == 0 {
+		return
+	}
+	models, err := s.modelRepo.List(ctx, types.DefaultBuiltinModelTenantID, "", "")
+	if err != nil || len(models) == 0 {
+		logger.Warnf(ctx, "[tenant] skip default model population: no builtin models found for tenant %d", tenant.ID)
+		return
+	}
+
+	ds := &types.DefaultSettings{}
+	for _, m := range models {
+		if !m.IsDefault || !m.IsBuiltin {
+			continue
+		}
+		switch m.Type {
+		case types.ModelTypeKnowledgeQA:
+			if ds.ChatModelID == "" {
+				ds.ChatModelID = m.ID
+			} else if ds.UtilityModelID == "" {
+				ds.UtilityModelID = m.ID
+			}
+		case types.ModelTypeEmbedding:
+			if ds.EmbeddingModelID == "" {
+				ds.EmbeddingModelID = m.ID
+			}
+		case types.ModelTypeRerank:
+			if ds.RerankModelID == "" {
+				ds.RerankModelID = m.ID
+			}
+		}
+	}
+
+	if ds.ChatModelID == "" && ds.EmbeddingModelID == "" && ds.RerankModelID == "" {
+		return
+	}
+
+	tenant.DefaultSettings = ds
+	if err := s.repo.UpdateTenant(ctx, tenant); err != nil {
+		logger.Warnf(ctx, "[tenant] failed to persist default model settings for tenant %d: %v", tenant.ID, err)
+	} else {
+		logger.Infof(ctx, "[tenant] populated default models for tenant %d: chat=%s embed=%s rerank=%s utility=%s",
+			tenant.ID, ds.ChatModelID, ds.EmbeddingModelID, ds.RerankModelID, ds.UtilityModelID)
+	}
 }
 
 func (s *tenantService) createDefaultStorageBackend(ctx context.Context, tenant *types.Tenant) error {
