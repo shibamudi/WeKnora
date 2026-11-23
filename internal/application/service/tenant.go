@@ -3,16 +3,17 @@ package service
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
 	werrors "github.com/Tencent/WeKnora/internal/errors"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 )
-
 // ListTenantsParams defines parameters for listing tenants with filtering and pagination
 type ListTenantsParams struct {
 	Page     int    // Page number for pagination
@@ -23,10 +24,11 @@ type ListTenantsParams struct {
 
 // tenantService implements the TenantService interface
 type tenantService struct {
-	repo        interfaces.TenantRepository
-	storageRepo interfaces.StorageBackendRepository
-	settings    interfaces.SystemSettingService
-	modelRepo   interfaces.ModelRepository
+	repo              interfaces.TenantRepository
+	storageRepo       interfaces.StorageBackendRepository
+	settings          interfaces.SystemSettingService
+	modelRepo         interfaces.ModelRepository
+	sandboxConfigRepo interfaces.SandboxConfigCreator
 }
 
 func NewTenantService(
@@ -34,8 +36,15 @@ func NewTenantService(
 	storageRepo interfaces.StorageBackendRepository,
 	settings interfaces.SystemSettingService,
 	modelRepo interfaces.ModelRepository,
+	sandboxConfigRepo interfaces.SandboxConfigCreator,
 ) interfaces.TenantService {
-	return &tenantService{repo: repo, storageRepo: storageRepo, settings: settings, modelRepo: modelRepo}
+	return &tenantService{
+		repo:              repo,
+		storageRepo:       storageRepo,
+		settings:          settings,
+		modelRepo:         modelRepo,
+		sandboxConfigRepo: sandboxConfigRepo,
+	}
 }
 
 // CreateTenant creates a new tenant
@@ -84,6 +93,7 @@ func (s *tenantService) CreateTenant(ctx context.Context, tenant *types.Tenant) 
 	logger.Infof(ctx, "Tenant created successfully, ID: %d, name: %s", tenant.ID, tenant.Name)
 
 	s.populateDefaultModelSettings(ctx, tenant)
+	s.populateDefaultSandboxConfig(ctx, tenant)
 
 	return tenant, nil
 }
@@ -136,6 +146,38 @@ func (s *tenantService) populateDefaultModelSettings(ctx context.Context, tenant
 	} else {
 		logger.Infof(ctx, "[tenant] populated default models for tenant %d: chat=%s embed=%s rerank=%s utility=%s",
 			tenant.ID, ds.ChatModelID, ds.EmbeddingModelID, ds.RerankModelID, ds.UtilityModelID)
+	}
+}
+
+// populateDefaultSandboxConfig creates a default Docker sandbox config for
+// new workspaces when WEKNORA_SANDBOX_DOCKER_ENABLED=true. Uses the default
+// sandbox image and conservative resource limits. Admins can override via
+// the workspace sandbox settings page.
+func (s *tenantService) populateDefaultSandboxConfig(ctx context.Context, tenant *types.Tenant) {
+	if tenant == nil || tenant.ID == 0 {
+		return
+	}
+	if enabled := strings.TrimSpace(os.Getenv("WEKNORA_SANDBOX_DOCKER_ENABLED")); !strings.EqualFold(enabled, "true") {
+		return
+	}
+	cfg := &types.TenantSandboxConfig{
+		SandboxType:      "docker",
+		DefaultTimeoutSec: 300,
+		Docker: &types.DockerSandboxConfig{
+			Image: "wechatopenai/weknora-sandbox:latest",
+		},
+	}
+	entity := &types.TenantSandboxConfigEntity{
+		ID:          uuid.New().String(),
+		TenantID:    tenant.ID,
+		Name:        "Default Sandbox",
+		SandboxType: cfg.SandboxType,
+		Config:      cfg,
+	}
+	if err := s.sandboxConfigRepo.Create(ctx, entity); err != nil {
+		logger.Warnf(ctx, "[tenant] failed to create default sandbox config for tenant %d: %v", tenant.ID, err)
+	} else {
+		logger.Infof(ctx, "[tenant] populated default sandbox config for tenant %d: type=docker image=%s", tenant.ID, cfg.Docker.Image)
 	}
 }
 

@@ -130,3 +130,11 @@ type TenantAPIKeyService interface {
 	// Returns the number of keys backfilled.
 	BackfillMissingKeyHashes(ctx context.Context) (int, error)
 }
+
+// SandboxConfigCreator is the subset of TenantSandboxConfigRepository needed
+// by tenantService to auto-populate a default sandbox config on workspace
+// creation. Defined here to avoid importing the repository package from
+// the service package.
+type SandboxConfigCreator interface {
+	Create(ctx context.Context, e *types.TenantSandboxConfigEntity) error
+}
