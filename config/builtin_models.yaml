@@ -9,37 +9,10 @@ builtin_models:
       api_key: ${LLM_API_KEY}
       provider: openai
 
-  - id: builtin-llm-qwen37-plus
-    type: KnowledgeQA
-    source: remote
-    name: Ali-dashscope/Qwen3.7-Plus
-    parameters:
-      base_url: ${LLM_BASE_URL}
-      api_key: ${LLM_API_KEY}
-      provider: openai
-
-  - id: builtin-llm-deepseek-v32
-    type: KnowledgeQA
-    source: remote
-    name: Ali-dashscope/DeepSeek-V3.2
-    parameters:
-      base_url: ${LLM_BASE_URL}
-      api_key: ${LLM_API_KEY}
-      provider: openai
-
-  - id: builtin-llm-doubao-pro
-    type: KnowledgeQA
-    source: remote
-    name: ByteDance-volcengine/Doubao-Seed-2.0-pro
-    parameters:
-      base_url: ${LLM_BASE_URL}
-      api_key: ${LLM_API_KEY}
-      provider: openai
-
   - id: builtin-llm-flash
     type: KnowledgeQA
     source: remote
-    name: Ali-dashscope/Qwen3.6-Flash
+    name: ${UTILITY_MODEL_NAME}
     parameters:
       base_url: ${LLM_BASE_URL}
       api_key: ${LLM_API_KEY}
