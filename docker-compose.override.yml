@@ -46,6 +46,10 @@ services:
       - traefik.http.routers.weknora-mcp-oauth.rule=Path(`/weknora/api/v1/mcp-oauth/callback`)
       - traefik.http.routers.weknora-mcp-oauth.service=weknora-svc
       - traefik.http.routers.weknora-mcp-oauth.middlewares=weknora-strip
+      # Auth config: 前端启动时读取(无认证,需豁免 CAS)
+      - traefik.http.routers.weknora-auth-config.rule=Path(`/weknora/api/v1/auth/config`)
+      - traefik.http.routers.weknora-auth-config.service=weknora-svc
+      - traefik.http.routers.weknora-auth-config.middlewares=weknora-strip
       # MCP: 自带 Bearer token 认证
       - traefik.http.routers.weknora-mcp.rule=PathPrefix(`/weknora/mcp`)
       - traefik.http.routers.weknora-mcp.service=weknora-svc

@@ -309,6 +309,35 @@ func (s *userService) Login(ctx context.Context, req *types.LoginRequest) (*type
 	}, nil
 }
 
+// TrustedSessionLogin generates a JWT for a user already authenticated by
+// the trusted-header middleware. It mirrors Login's token-generation and
+// response-building logic but skips password verification — the caller
+// (AuthHandler.TrustedSession) verifies that the auth source is trusted.
+func (s *userService) TrustedSessionLogin(ctx context.Context, user *types.User) (*types.LoginResponse, error) {
+	if user == nil || !user.IsActive {
+		return &types.LoginResponse{Success: false, Message: "User not available"}, nil
+	}
+	resolvedTenantID := s.resolveLoginTenantID(ctx, user)
+	accessToken, refreshToken, err := s.generateTokensForTenant(ctx, user, resolvedTenantID)
+	if err != nil {
+		return nil, fmt.Errorf("trusted session: failed to generate tokens: %w", err)
+	}
+	var tenant *types.Tenant
+	if resolvedTenantID > 0 {
+		tenant, _ = s.tenantService.GetTenantByID(ctx, resolvedTenantID)
+	}
+	memberships := s.buildMembershipsForUser(ctx, user, tenant)
+	return &types.LoginResponse{
+		Success:      true,
+		Message:      "Trusted session login",
+		User:         user,
+		ActiveTenant: tenant,
+		Memberships:  memberships,
+		Token:        accessToken,
+		RefreshToken: refreshToken,
+	}, nil
+}
+
 // buildMembershipsForUser returns the user's tenant memberships projected
 // into the login-response shape. activeTenant (if non-nil and matching one
 // of the rows) is used to reuse its already-fetched name without a second

@@ -885,6 +885,39 @@ func (h *AuthHandler) GetAuthConfig(c *gin.Context) {
 	})
 }
 
+// TrustedSession godoc
+// @Summary      可信头部会话登录
+// @Description  当可信头部认证启用时,签发 JWT 供前端使用。用户已由中间件通过
+// @Description  Traefik 注入的 X-User-Id 头部认证,此端点只负责签发 token。
+// @Tags         认证
+// @Produce      json
+// @Success      200  {object}  types.LoginResponse
+// @Failure      403  "可信头部认证未启用"
+// @Router       /auth/trusted-session [get]
+func (h *AuthHandler) TrustedSession(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	if h.configInfo == nil || h.configInfo.Auth == nil ||
+		h.configInfo.Auth.TrustedHeaderAuth == nil || !h.configInfo.Auth.TrustedHeaderAuth.Enabled {
+		_ = c.Error(errors.NewForbiddenError("Trusted header auth is not enabled"))
+		return
+	}
+
+	user, err := h.userService.GetCurrentUser(ctx)
+	if err != nil || user == nil || !user.IsActive {
+		_ = c.Error(errors.NewUnauthorizedError("No authenticated user in context"))
+		return
+	}
+
+	response, err := h.userService.TrustedSessionLogin(ctx, user)
+	if err != nil {
+		logger.Errorf(ctx, "TrustedSession failed: %v", err)
+		_ = c.Error(errors.NewInternalServerError("Failed to generate session token"))
+		return
+	}
+	c.JSON(http.StatusOK, dto.NewAuthLoginResponse(response))
+}
+
 // SwitchTenant godoc
 // @Summary      切换激活空间
 // @Description  为当前用户在目标空间重新签发访问令牌；要求该用户在目标空间存在 active 成员关系（跨租户超级用户除外）。

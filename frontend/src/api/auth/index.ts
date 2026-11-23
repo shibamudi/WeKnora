@@ -489,6 +489,14 @@ export async function changePassword(
 }
 
 /**
+ * 可信头部会话登录:CAS 登录后获取 JWT
+ */
+export async function trustedSessionLogin(): Promise<LoginResponse> {
+  const response = await get('/api/v1/auth/trusted-session')
+  return response as unknown as LoginResponse
+}
+
+/**
  * 验证Token有效性
  */
 export async function validateToken(): Promise<{ success: boolean; valid?: boolean; message?: string }> {

@@ -36,6 +36,9 @@ type UserService interface {
 	// (from a trusted proxy header). If not found and auto-create is enabled,
 	// a new user is provisioned with a synthetic email and random password.
 	FindOrCreateTrustedHeaderUser(ctx context.Context, userID, userName string) (*types.User, error)
+	// TrustedSessionLogin generates tokens for a user authenticated via
+	// trusted headers, without password verification.
+	TrustedSessionLogin(ctx context.Context, user *types.User) (*types.LoginResponse, error)
 	// GetUserByTenantID gets the first user (owner) of a tenant
 	GetUserByTenantID(ctx context.Context, tenantID uint64) (*types.User, error)
 	// UpdateUser updates user data without changing account status; use SetUserActive for that.

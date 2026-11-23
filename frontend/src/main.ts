@@ -20,6 +20,7 @@ import { initFont } from "@/composables/useFont";
 import { installTDesignIconOfflineGuard } from "@/utils/tdesign-icon-offline";
 import { installAutofillGuard } from "@/utils/disable-autofill";
 import { useAuthStore } from "@/stores/auth";
+import { trustedSessionLogin } from "@/api/auth";
 
 // 必须在 Vue 组件挂载之前执行，避免 tdesign-icons 运行时请求 tdesign.gtimg.com
 installTDesignIconOfflineGuard();
@@ -47,6 +48,39 @@ async function bootstrap() {
       await authStore.refreshFromAuthMe();
     } catch {
       // best-effort; capabilities stay at defaults until the next refresh
+    }
+  } else {
+    // 可信头部认证(CAS):无本地 token 时,通过 /auth/trusted-session 获取 JWT
+    try {
+      const response = await trustedSessionLogin();
+      if (response.success && response.token) {
+        authStore.setToken(response.token);
+        if (response.refresh_token) {
+          authStore.setRefreshToken(response.refresh_token);
+        }
+        if (response.user) {
+          authStore.setUser(response.user as any);
+        }
+        if (response.active_tenant) {
+          authStore.setTenant({
+            id: String(response.active_tenant.id),
+            name: response.active_tenant.name || '',
+            owner_id: '',
+            description: response.active_tenant.description,
+            status: response.active_tenant.status || 'active',
+            business: response.active_tenant.business || '',
+            storage_quota: response.active_tenant.storage_quota || 0,
+            storage_used: response.active_tenant.storage_used || 0,
+            created_at: response.active_tenant.created_at || new Date().toISOString(),
+            updated_at: response.active_tenant.updated_at || new Date().toISOString(),
+          });
+        }
+        if (response.memberships) {
+          authStore.setMemberships(response.memberships as any);
+        }
+      }
+    } catch {
+      // 可信头部认证未启用或 CAS 会话不存在,正常进入路由守卫流程
     }
   }
 
