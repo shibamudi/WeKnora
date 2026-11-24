@@ -137,5 +137,15 @@ dest="$crate_dir/lib/$lib_dir"
 mkdir -p "$dest"
 cp "$crate_dir/target/$target/release/$lib_name" "$dest/$lib_name"
 
+# Strip LTO bitcode sections: Go's cgo rejects archives containing
+# .llvmbc/.llvm.lto sections (CGO_LDFLAGS security check, Go 1.24+).
+# Rust release builds embed these even when lto=off because individual
+# compilation units always carry the bitcode for potential cross-crate LTO.
+if command -v llvm-objcopy >/dev/null 2>&1; then
+  llvm-objcopy --remove-section=.llvmbc --remove-section=.llvm.lto --remove-section=.llvmcmd "$dest/$lib_name"
+elif command -v objcopy >/dev/null 2>&1; then
+  objcopy --remove-section=.llvmbc --remove-section=.llvm.lto --remove-section=.llvmcmd "$dest/$lib_name"
+fi
+
 echo "Wrote $dest/$lib_name"
 echo "Build WeKnora with the archive: go build -tags anydoc ./cmd/server"

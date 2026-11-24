@@ -79,7 +79,9 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     if [ "$WITH_ANYDOC" = "1" ]; then \
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
             | sh -s -- -y --profile minimal --default-toolchain stable && \
-        ./scripts/build-anydoc-lib.sh; \
+        mkdir -p /usr/local/cargo && \
+        printf '[source.crates-io]\nreplace-with = "rsproxy-sparse"\n[source.rsproxy-sparse]\nregistry = "sparse+https://rsproxy.cn/index/"\n[net]\ngit-fetch-with-cli = true\n' > /usr/local/cargo/config.toml && \
+        CARGO_PROFILE_RELEASE_LTO=off ./scripts/build-anydoc-lib.sh; \
     fi
 
 # Build the application with version info. Mount the Go build cache as well as
