@@ -71,7 +71,7 @@
       <!-- 关系类型配置 -->
       <div v-if="localGraphExtract.enabled" class="setting-row vertical">
         <div class="setting-info">
-          <label>{{ t('graphSettings.tagsLabel') }}</label>
+          <label>{{ t('graphSettings.tagsLabel') }} <span class="required-mark">*</span></label>
           <p class="desc">{{ t('graphSettings.tagsDescription') }}</p>
         </div>
         <div class="setting-control full-width">
@@ -108,7 +108,7 @@
       <!-- 示例文本 -->
       <div v-if="localGraphExtract.enabled" class="setting-row vertical">
         <div class="setting-info">
-          <label>{{ t('graphSettings.sampleTextLabel') }}</label>
+          <label>{{ t('graphSettings.sampleTextLabel') }} <span class="required-mark">*</span></label>
           <p class="desc">{{ t('graphSettings.sampleTextDescription') }}</p>
         </div>
         <div class="setting-control full-width">
@@ -144,7 +144,7 @@
       <!-- 实体列表 -->
       <div v-if="localGraphExtract.enabled && localGraphExtract.nodes.length > 0" class="setting-row vertical">
         <div class="setting-info">
-          <label>{{ t('graphSettings.entityListLabel') }}</label>
+          <label>{{ t('graphSettings.entityListLabel') }} <span class="required-mark">*</span></label>
           <p class="desc">{{ t('graphSettings.entityListDescription') }}</p>
         </div>
         <div class="setting-control full-width">
@@ -199,7 +199,7 @@
       <!-- 添加实体按钮 -->
       <div v-if="localGraphExtract.enabled" class="setting-row">
         <div class="setting-info">
-          <label>{{ t('graphSettings.manageEntitiesLabel') }}</label>
+          <label>{{ t('graphSettings.manageEntitiesLabel') }} <span class="required-mark">*</span></label>
           <p class="desc">{{ t('graphSettings.manageEntitiesDescription') }}</p>
         </div>
         <div class="setting-control">
@@ -215,7 +215,7 @@
       <!-- 关系列表 -->
       <div v-if="localGraphExtract.enabled && localGraphExtract.relations.length > 0" class="setting-row vertical">
         <div class="setting-info">
-          <label>{{ t('graphSettings.relationListLabel') }}</label>
+          <label>{{ t('graphSettings.relationListLabel') }} <span class="required-mark">*</span></label>
           <p class="desc">{{ t('graphSettings.relationListDescription') }}</p>
         </div>
         <div class="setting-control full-width">
@@ -280,7 +280,7 @@
       <!-- 添加关系按钮 -->
       <div v-if="localGraphExtract.enabled" class="setting-row">
         <div class="setting-info">
-          <label>{{ t('graphSettings.manageRelationsLabel') }}</label>
+          <label>{{ t('graphSettings.manageRelationsLabel') }} <span class="required-mark">*</span></label>
           <p class="desc">{{ t('graphSettings.manageRelationsDescription') }}</p>
         </div>
         <div class="setting-control">
@@ -875,5 +875,10 @@ onMounted(async () => {
   .setting-row:not(.vertical) .setting-control {
     align-self: flex-start;
   }
+}
+
+.required-mark {
+  color: var(--td-error-color);
+  margin-left: 2px;
 }
 </style>
