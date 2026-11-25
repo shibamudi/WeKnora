@@ -54,6 +54,28 @@ COPY third_party/anydoc-go/go.mod third_party/anydoc-go/go.mod
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY cmd/download cmd/download
 RUN go run cmd/download/duckdb/duckdb.go
+
+# Copy anydoc source + build script before COPY . . so that the Rust
+# toolchain install + anydoc compilation layer is cached independently
+# of WeKnora source changes. Without this reorder, every .go file edit
+# invalidates the 27-minute Rust download + build layer.
+COPY scripts/build-anydoc-lib.sh ./scripts/build-anydoc-lib.sh
+COPY third_party/anydoc-go ./third_party/anydoc-go
+
+ARG WITH_ANYDOC=1
+ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo
+ENV RUSTUP_DIST_SERVER=https://mirrors.tuna.tsinghua.edu.cn/rustup
+ENV PATH=/usr/local/cargo/bin:$PATH
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    if [ "$WITH_ANYDOC" = "1" ]; then \
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --profile minimal --default-toolchain stable && \
+        mkdir -p /usr/local/cargo && \
+        printf '[source.crates-io]\nreplace-with = "rsproxy-sparse"\n[source.rsproxy-sparse]\nregistry = "sparse+https://rsproxy.cn/index/"\n[net]\ngit-fetch-with-cli = true\n' > /usr/local/cargo/config.toml && \
+        CARGO_PROFILE_RELEASE_LTO=off ./scripts/build-anydoc-lib.sh; \
+    fi
+
 COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod bash ./scripts/copy-licenses.sh /license-bundle
 
@@ -66,23 +88,6 @@ ARG BUILD_TIME_ARG
 ENV VERSION=${VERSION_ARG}
 ENV COMMIT_ID=${COMMIT_ID_ARG}
 ENV BUILD_TIME=${BUILD_TIME_ARG}
-
-# Link the anydoc parser engine (office docs converted in-process, no
-# Python docreader). Default on so Hub / compose images ship a working
-# engine; pass WITH_ANYDOC=0 to skip the Rust toolchain (~few minutes and
-# ~1 GB of build-stage layers).
-ARG WITH_ANYDOC=1
-ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo
-ENV PATH=/usr/local/cargo/bin:$PATH
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git \
-    if [ "$WITH_ANYDOC" = "1" ]; then \
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-            | sh -s -- -y --profile minimal --default-toolchain stable && \
-        mkdir -p /usr/local/cargo && \
-        printf '[source.crates-io]\nreplace-with = "rsproxy-sparse"\n[source.rsproxy-sparse]\nregistry = "sparse+https://rsproxy.cn/index/"\n[net]\ngit-fetch-with-cli = true\n' > /usr/local/cargo/config.toml && \
-        CARGO_PROFILE_RELEASE_LTO=off ./scripts/build-anydoc-lib.sh; \
-    fi
 
 # Build the application with version info. Mount the Go build cache as well as
 # the module cache: `COPY . .` invalidates this layer on every source change,
