@@ -1,0 +1,77 @@
+# ============================================================
+# 测试服务器部署 override — behind gateway-cas Traefik
+# 子路径: /weknora-test
+# 访问地址: https://xplt.sdu.edu.cn/weknora-test
+# 不开放任何宿主机端口,全部通过 Traefik 代理
+# ============================================================
+services:
+  frontend:
+    build:
+      args:
+        VITE_BASE_PATH: /weknora-test/
+    ports: !reset []
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.weknora-test-machine-api.rule=PathPrefix(`/weknora-test/api`) && HeaderRegexp(`X-API-Key`, `.+`)
+      - traefik.http.routers.weknora-test-machine-api.service=weknora-test-svc
+      - traefik.http.routers.weknora-test-machine-api.middlewares=weknora-test-strip
+      - traefik.http.routers.weknora-test-im.rule=PathPrefix(`/weknora-test/api/v1/im/callback`)
+      - traefik.http.routers.weknora-test-im.service=weknora-test-svc
+      - traefik.http.routers.weknora-test-im.middlewares=weknora-test-strip
+      - traefik.http.routers.weknora-test-presigned.rule=Path(`/weknora-test/api/v1/files/presigned`)
+      - traefik.http.routers.weknora-test-presigned.service=weknora-test-svc
+      - traefik.http.routers.weknora-test-presigned.middlewares=weknora-test-strip
+      - traefik.http.routers.weknora-test-grants.rule=PathPrefix(`/weknora-test/r/`)
+      - traefik.http.routers.weknora-test-grants.service=weknora-test-svc
+      - traefik.http.routers.weknora-test-grants.middlewares=weknora-test-strip
+      - traefik.http.routers.weknora-test-embed-api.rule=PathPrefix(`/weknora-test/api/v1/embed`) || Path(`/weknora-test/api/v1/embed-frame-policy`)
+      - traefik.http.routers.weknora-test-embed-api.service=weknora-test-svc
+      - traefik.http.routers.weknora-test-embed-api.middlewares=weknora-test-strip
+      - traefik.http.routers.weknora-test-embed-static.rule=PathPrefix(`/weknora-test/embed/`) || Path(`/weknora-test/weknora-widget.js`) || Path(`/weknora-test/config.js`) || PathPrefix(`/weknora-test/assets/`) || PathPrefix(`/weknora-test/tdesign-icons/`)
+      - traefik.http.routers.weknora-test-embed-static.service=weknora-test-svc
+      - traefik.http.routers.weknora-test-embed-static.middlewares=weknora-test-strip
+      - traefik.http.routers.weknora-test-browserskill.rule=PathPrefix(`/weknora-test/api/v1/local-browser/extension`)
+      - traefik.http.routers.weknora-test-browserskill.service=weknora-test-svc
+      - traefik.http.routers.weknora-test-browserskill.middlewares=weknora-test-strip
+      - traefik.http.routers.weknora-test-mcp-oauth.rule=Path(`/weknora-test/api/v1/mcp-oauth/callback`)
+      - traefik.http.routers.weknora-test-mcp-oauth.service=weknora-test-svc
+      - traefik.http.routers.weknora-test-mcp-oauth.middlewares=weknora-test-strip
+      - traefik.http.routers.weknora-test-auth-config.rule=Path(`/weknora-test/api/v1/auth/config`)
+      - traefik.http.routers.weknora-test-auth-config.service=weknora-test-svc
+      - traefik.http.routers.weknora-test-auth-config.middlewares=weknora-test-strip
+      - traefik.http.routers.weknora-test-mcp.rule=PathPrefix(`/weknora-test/mcp`)
+      - traefik.http.routers.weknora-test-mcp.service=weknora-test-svc
+      - traefik.http.routers.weknora-test-mcp.middlewares=weknora-test-strip
+      - traefik.http.routers.weknora-test.rule=PathPrefix(`/weknora-test`)
+      - traefik.http.routers.weknora-test.priority=1
+      - traefik.http.services.weknora-test-svc.loadbalancer.server.port=80
+      - traefik.http.routers.weknora-test.service=weknora-test-svc
+      - traefik.http.routers.weknora-test.middlewares=cas-auth@docker,weknora-test-strip
+      - traefik.http.middlewares.weknora-test-strip.stripprefix.prefixes=/weknora-test
+    networks:
+      - WeKnora-network
+      - shared
+
+  app:
+    build:
+      args:
+        GOPROXY_ARG: https://goproxy.cn
+    ports: !reset []
+    volumes:
+      - ./config/builtin_models.yaml:/app/config/builtin_models.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - WeKnora-network
+
+  postgres:
+    ports: !reset []
+
+  minio:
+    ports: !reset []
+
+  neo4j:
+    ports: !reset []
+
+networks:
+  shared:
+    external: true
