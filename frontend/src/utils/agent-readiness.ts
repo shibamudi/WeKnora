@@ -18,9 +18,11 @@ export function agentHasConfiguredChatModel(
   sourceModelIsRemote = false,
 ): boolean {
   const modelID = config?.model_id?.trim()
-  if (!modelID) return false
-  if (sourceModelIsRemote) return true
-  return models.some(model => model.type === 'KnowledgeQA' && model.id === modelID)
+  if (modelID) {
+    if (sourceModelIsRemote) return true
+    return models.some(model => model.type === 'KnowledgeQA' && model.id === modelID)
+  }
+  return models.some(model => model.type === 'KnowledgeQA')
 }
 
 /**
@@ -61,10 +63,10 @@ export function getAgentNotReadyReasonKeys(
 
   if (options.isAgentMode && agentRequiresRerankModel(config)) {
     const rerankModelID = config?.rerank_model_id?.trim()
-    const rerankExists = !!rerankModelID && (
-      options.isSharedAgent
-      || models.some(model => model.type === 'Rerank' && model.id === rerankModelID)
-    )
+    const rerankExists = !!rerankModelID
+      ? (options.isSharedAgent
+        || models.some(model => model.type === 'Rerank' && model.id === rerankModelID))
+      : models.some(model => model.type === 'Rerank')
     if (!rerankExists) {
       reasons.push('rerank_model')
     }

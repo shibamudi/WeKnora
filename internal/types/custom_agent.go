@@ -55,8 +55,7 @@ func GrantsProductDocs(agent *CustomAgent) bool {
 // model from its knowledge base or the system KnowledgeQA default, and the
 // rerank model from the workspace.
 func UsesWorkspaceModelFallback(agent *CustomAgent) bool {
-	return agent != nil && agent.IsBuiltin &&
-		(agent.ID == BuiltinWikiFixerID || agent.ID == BuiltinWeKnoraAssistantID)
+	return agent != nil && agent.IsBuiltin
 }
 
 // RunsInSharedKBWorkspace reports whether a built-in agent opened on one
