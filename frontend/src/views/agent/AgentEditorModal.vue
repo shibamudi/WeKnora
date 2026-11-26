@@ -3912,6 +3912,26 @@ const fillBuiltinAgentDefaults = () => {
   if (!config.fallback_response && defaultFallbackResponse.value) {
     config.fallback_response = defaultFallbackResponse.value;
   }
+
+  // 内置智能体 YAML 不带 model_id / rerank_model_id / sandbox_config_id。
+  // 编辑时补上工作区默认值，否则保存校验（modelRequired）会阻断，且运行时
+  // 沙箱会被 resolveTenantSandboxForConfig 当作空配置禁用。
+  // 与 applyDefaultModelsIfEmpty（仅 create 模式）互补：此处覆盖 edit 模式。
+  const chatModelId = selectInitialModelId(allModels.value, 'KnowledgeQA');
+  const rerankModelId = selectInitialModelId(allModels.value, 'Rerank');
+  if (!config.model_id && chatModelId) {
+    config.model_id = chatModelId;
+  }
+  if (!config.rerank_model_id && rerankModelId) {
+    config.rerank_model_id = rerankModelId;
+  }
+  if (!config.sandbox_config_id) {
+    const sandboxConfigs = namedSandboxConfigs();
+    if (sandboxConfigs.length > 0) {
+      const defaultCfg = sandboxConfigs.find(c => c.name === 'Default Sandbox') ?? sandboxConfigs[0];
+      config.sandbox_config_id = defaultCfg.id;
+    }
+  }
 };
 
 // 监听知识库选择模式变化
