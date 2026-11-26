@@ -685,6 +685,8 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	}))
 	must(container.Invoke(startUserMachineGC))
 	logger.Debugf(ctx, "[Container] User machine GC registered")
+	must(container.Invoke(startOrphanSweeper))
+	logger.Debugf(ctx, "[Container] Orphan sandbox sweeper registered")
 
 	// HTTP handlers layer
 	logger.Debugf(ctx, "[Container] Registering HTTP handlers...")
@@ -2332,4 +2334,81 @@ func startAuditLogRetention(
 		runner.StopWithin(cleanupStepTimeout)
 		return nil
 	})
+}
+
+// orphanSweeperInterval bounds how often provider sandboxes are reconciled
+// against live sessions.
+const orphanSweeperInterval = 5 * time.Minute
+
+// startOrphanSweeper periodically reclaims provider sandboxes whose sessions
+// no longer exist — the safety net for when destroyBoundSandbox is skipped,
+// fails silently, or the binding was lost between process restarts.
+func startOrphanSweeper(
+	resolver sandbox.TenantSandboxResolver,
+	repo repository.TenantSandboxConfigRepository,
+	cleaner interfaces.ResourceCleaner,
+) {
+	if resolver == nil || repo == nil {
+		logger.Warnf(context.Background(), "[OrphanSweeper] disabled: resolver or config repository unavailable")
+		return
+	}
+	stop := make(chan struct{})
+	go func() {
+		timer := time.NewTimer(2 * time.Minute)
+		defer timer.Stop()
+		for {
+			select {
+			case <-timer.C:
+				sweepOrphanSandboxes(context.Background(), resolver, repo)
+				timer.Reset(orphanSweeperInterval)
+			case <-stop:
+				return
+			}
+		}
+	}()
+	cleaner.RegisterWithName("OrphanSweeper", func() error {
+		close(stop)
+		return nil
+	})
+}
+
+func sweepOrphanSandboxes(
+	ctx context.Context,
+	resolver sandbox.TenantSandboxResolver,
+	repo repository.TenantSandboxConfigRepository,
+) {
+	configs, err := repo.ListAll(ctx)
+	if err != nil {
+		logger.Warnf(ctx, "[OrphanSweeper] list sandbox configs failed: %v", err)
+		return
+	}
+	logger.Debugf(ctx, "[OrphanSweeper] scanning %d sandbox config(s)", len(configs))
+	for _, cfg := range configs {
+		if cfg == nil || types.IsSandboxWorkspacePolicyRow(cfg) {
+			continue
+		}
+		sweepCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		mgr, err := resolver.Resolve(sweepCtx, cfg.TenantID, cfg.ID)
+		if err != nil {
+			logger.Warnf(ctx, "[OrphanSweeper] resolve config %s: %v", cfg.ID, err)
+			cancel()
+			continue
+		}
+		sweeper, ok := mgr.(sandbox.SandboxSweeper)
+		if !ok {
+			cancel()
+			continue
+		}
+		if n, err := sweeper.ReapOrphanSandboxes(sweepCtx); err != nil {
+			logger.Warnf(ctx, "[OrphanSweeper] config %s: %v", cfg.ID, err)
+		} else if n > 0 {
+			logger.Infof(ctx, "[OrphanSweeper] config %s: reaped %d orphan sandbox(s)", cfg.ID, n)
+		}
+		if n, err := sweeper.SweepIdleSandboxes(sweepCtx); err != nil {
+			logger.Warnf(ctx, "[OrphanSweeper] config %s idle sweep: %v", cfg.ID, err)
+		} else if n > 0 {
+			logger.Infof(ctx, "[OrphanSweeper] config %s: swept %d idle sandbox(s)", cfg.ID, n)
+		}
+		cancel()
+	}
 }

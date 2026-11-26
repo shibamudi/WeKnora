@@ -1325,6 +1325,16 @@ func (c *DockerRemoteClient) sweepInBackground(ctx context.Context) {
 	c.sweeper.trigger(ctx)
 }
 
+// SweepIdle runs one idle-container reclamation pass synchronously. Called by
+// the periodic orphan sweeper so abandoned Docker containers are reclaimed
+// even when no Create/Connect operation triggers sweepInBackground.
+func (c *DockerRemoteClient) SweepIdle(ctx context.Context) (int, error) {
+	if c == nil || c.sweeper == nil {
+		return 0, nil
+	}
+	return c.sweeper.sweep(ctx)
+}
+
 // dockerHandleID validates a handle belongs to this backend.
 func dockerHandleID(op string, handle RemoteSandboxHandle) (string, error) {
 	if handle == nil {

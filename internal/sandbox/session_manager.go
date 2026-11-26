@@ -518,6 +518,83 @@ func (m *SessionBoundManager) DestroySession(ctx context.Context, sessionID stri
 	return m.lifecycle.Destroy(ctx, sc.key)
 }
 
+// SandboxSweeper drives one periodic reconciliation pass against the provider.
+// Asserted by *SessionBoundManager; the container's sweeper loop resolves a
+// manager per config and calls ReapOrphanSandboxes / SweepIdleSandboxes.
+type SandboxSweeper interface {
+	ReapOrphanSandboxes(ctx context.Context) (int, error)
+	SweepIdleSandboxes(ctx context.Context) (int, error)
+}
+
+// ReapOrphanSandboxes deletes provider sandboxes whose session no longer
+// exists. Shared user machines are skipped — their reclamation is the
+// UserMachineGC's job.
+func (m *SessionBoundManager) ReapOrphanSandboxes(ctx context.Context) (int, error) {
+	if m == nil || m.remoteDisabled() {
+		return 0, nil
+	}
+	lifecycle := m.lifecycle
+	if lifecycle == nil || lifecycle.client == nil {
+		return 0, nil
+	}
+	tenantID := lifecycle.configTenantID
+	configID := m.configID
+	summaries, err := lifecycle.client.List(ctx, configSandboxFilter(tenantID, configID))
+	if err != nil {
+		return 0, fmt.Errorf("reap orphan sandboxes: list: %w", err)
+	}
+	deleted := 0
+	for _, s := range summaries {
+		if ctx.Err() != nil {
+			return deleted, ctx.Err()
+		}
+		if s.Metadata[remoteMetadataAllocation] == MetadataAllocationUser {
+			continue
+		}
+		sessionID := s.Metadata[remoteMetadataSessionID]
+		if sessionID == "" {
+			continue
+		}
+		key := SessionSandboxKey{TenantID: tenantID, SessionID: sessionID}
+		exists, err := lifecycle.sessionChecker.SessionExists(ctx, key)
+		if err != nil {
+			continue
+		}
+		if exists {
+			continue
+		}
+		if err := lifecycle.client.Delete(ctx, s.ID); err != nil {
+			continue
+		}
+		deleted++
+	}
+	return deleted, nil
+}
+
+// SweepIdleSandboxes reclaims containers that are still bound to live sessions
+// but have been idle beyond their TTL. Only the Docker backend implements this;
+// E2B and Cube rely on provider-native TTL pauses, which the orphan reaper
+// then cleans up once the session is gone.
+func (m *SessionBoundManager) SweepIdleSandboxes(ctx context.Context) (int, error) {
+	if m == nil || m.remoteDisabled() || m.lifecycle == nil {
+		return 0, nil
+	}
+	client := m.lifecycle.client
+	if lc, ok := client.(*langfuseSnapshotClient); ok {
+		client = lc.inner
+	} else if lc, ok := client.(*langfuseRemoteClient); ok {
+		client = lc.inner
+	}
+	type idleSweeper interface {
+		SweepIdle(ctx context.Context) (int, error)
+	}
+	sweeper, ok := client.(idleSweeper)
+	if !ok {
+		return 0, nil
+	}
+	return sweeper.SweepIdle(ctx)
+}
+
 // InvalidateConfigSandboxes marks every session sandbox this config owns stale,
 // so each session rebuilds its sandbox from the config's current image on its
 // next use, and reports how many bindings were marked.
