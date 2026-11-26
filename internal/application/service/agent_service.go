@@ -814,6 +814,11 @@ func (s *agentService) resolveWorkspaceSandbox(
 		configID = config.SandboxConfigID
 	}
 	tenantID, _ := types.TenantIDFromContext(ctx)
+	if strings.TrimSpace(configID) == "" && tenantID != 0 && s.db != nil {
+		if fallback := s.lookupDefaultSandboxConfigID(ctx, tenantID); fallback != "" {
+			configID = fallback
+		}
+	}
 	sandboxMgr, _, err := resolveSandboxForExecution(
 		ctx, s.sandboxResolver, s.sandboxMgr, s.sandboxPinner,
 		tenantID, sessionID, configID, s.sandboxPolicy,
@@ -826,6 +831,19 @@ func (s *agentService) resolveWorkspaceSandbox(
 		return nil, nil
 	}
 	return sandboxMgr, nil
+}
+
+func (s *agentService) lookupDefaultSandboxConfigID(ctx context.Context, tenantID uint64) string {
+	configs, err := repository.NewTenantSandboxConfigRepository(s.db).ListByTenant(ctx, tenantID)
+	if err != nil || len(configs) == 0 {
+		return ""
+	}
+	for _, c := range configs {
+		if c != nil && c.Name == "Default Sandbox" {
+			return c.ID
+		}
+	}
+	return configs[0].ID
 }
 
 func (s *agentService) lookupSessionWorkspaceLayout(

@@ -29,6 +29,7 @@ type tenantService struct {
 	settings          interfaces.SystemSettingService
 	modelRepo         interfaces.ModelRepository
 	sandboxConfigRepo interfaces.SandboxConfigCreator
+	agentRepo         interfaces.CustomAgentRepository
 }
 
 func NewTenantService(
@@ -37,6 +38,7 @@ func NewTenantService(
 	settings interfaces.SystemSettingService,
 	modelRepo interfaces.ModelRepository,
 	sandboxConfigRepo interfaces.SandboxConfigCreator,
+	agentRepo interfaces.CustomAgentRepository,
 ) interfaces.TenantService {
 	return &tenantService{
 		repo:              repo,
@@ -44,6 +46,7 @@ func NewTenantService(
 		settings:          settings,
 		modelRepo:         modelRepo,
 		sandboxConfigRepo: sandboxConfigRepo,
+		agentRepo:         agentRepo,
 	}
 }
 
@@ -93,7 +96,8 @@ func (s *tenantService) CreateTenant(ctx context.Context, tenant *types.Tenant) 
 	logger.Infof(ctx, "Tenant created successfully, ID: %d, name: %s", tenant.ID, tenant.Name)
 
 	s.populateDefaultModelSettings(ctx, tenant)
-	s.populateDefaultSandboxConfig(ctx, tenant)
+	sandboxConfigID := s.populateDefaultSandboxConfig(ctx, tenant)
+	s.populateBuiltinAgentConfigs(ctx, tenant, sandboxConfigID)
 
 	return tenant, nil
 }
@@ -153,12 +157,12 @@ func (s *tenantService) populateDefaultModelSettings(ctx context.Context, tenant
 // new workspaces when WEKNORA_SANDBOX_DOCKER_ENABLED=true. Uses the default
 // sandbox image and conservative resource limits. Admins can override via
 // the workspace sandbox settings page.
-func (s *tenantService) populateDefaultSandboxConfig(ctx context.Context, tenant *types.Tenant) {
+func (s *tenantService) populateDefaultSandboxConfig(ctx context.Context, tenant *types.Tenant) string {
 	if tenant == nil || tenant.ID == 0 {
-		return
+		return ""
 	}
 	if enabled := strings.TrimSpace(os.Getenv("WEKNORA_SANDBOX_DOCKER_ENABLED")); !strings.EqualFold(enabled, "true") {
-		return
+		return ""
 	}
 	cfg := &types.TenantSandboxConfig{
 		SandboxType:      "docker",
@@ -176,9 +180,42 @@ func (s *tenantService) populateDefaultSandboxConfig(ctx context.Context, tenant
 	}
 	if err := s.sandboxConfigRepo.Create(ctx, entity); err != nil {
 		logger.Warnf(ctx, "[tenant] failed to create default sandbox config for tenant %d: %v", tenant.ID, err)
-	} else {
-		logger.Infof(ctx, "[tenant] populated default sandbox config for tenant %d: type=docker image=%s", tenant.ID, cfg.Docker.Image)
+		return ""
 	}
+	logger.Infof(ctx, "[tenant] populated default sandbox config for tenant %d: type=docker image=%s", tenant.ID, cfg.Docker.Image)
+	return entity.ID
+}
+
+// populateBuiltinAgentConfigs persists built-in agents for a new workspace with
+// the workspace's default model and sandbox config already filled in. Without
+// this, built-in agents load from YAML with empty model_id / sandbox_config_id;
+// the runtime fallbacks cover execution, but the editor's save validation and
+// the agent card's model display both expect stored values.
+func (s *tenantService) populateBuiltinAgentConfigs(ctx context.Context, tenant *types.Tenant, sandboxConfigID string) {
+	if s.agentRepo == nil || tenant == nil || tenant.ID == 0 {
+		return
+	}
+	chatModelID := ""
+	if tenant.DefaultSettings != nil {
+		chatModelID = tenant.DefaultSettings.ChatModelID
+	}
+	for _, agentID := range types.GetBuiltinAgentIDs() {
+		agent := types.GetBuiltinAgent(agentID, tenant.ID)
+		if agent == nil {
+			continue
+		}
+		if chatModelID != "" {
+			agent.Config.ModelID = chatModelID
+		}
+		if sandboxConfigID != "" {
+			agent.Config.SandboxConfigID = sandboxConfigID
+		}
+		agent.EnsureDefaults()
+		if err := s.agentRepo.CreateAgent(ctx, agent); err != nil {
+			logger.Warnf(ctx, "[tenant] failed to seed builtin agent %s for tenant %d: %v", agentID, tenant.ID, err)
+		}
+	}
+	logger.Infof(ctx, "[tenant] seeded builtin agents for tenant %d: model=%s sandbox=%s", tenant.ID, chatModelID, sandboxConfigID)
 }
 
 func (s *tenantService) createDefaultStorageBackend(ctx context.Context, tenant *types.Tenant) error {
