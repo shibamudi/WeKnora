@@ -26,6 +26,18 @@ func pairingOrigin(r *http.Request, page string) string {
 	}
 	if isLoopbackHostname(requestHostname(host)) {
 		if origin, ok := loopbackPairingOrigin(host); ok {
+			// A reverse proxy that forwards Host: localhost makes the
+			// loopback branch fire on a public deployment. Honour the
+			// proxy's scheme (X-Forwarded-Proto) and carry the sub-path
+			// prefix from the page origin so the pairing link stays valid.
+			if r != nil && strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+				origin = "https://" + strings.TrimPrefix(origin, "http://")
+			}
+			if pageURL, perr := url.Parse(page); perr == nil {
+				if trimmed := strings.TrimRight(pageURL.Path, "/"); trimmed != "" {
+					return origin + trimmed
+				}
+			}
 			return origin
 		}
 		return ""
@@ -35,6 +47,14 @@ func pairingOrigin(r *http.Request, page string) string {
 	}
 	if isHTTPOrigin(page) {
 		if origin := requestHTTPOrigin(r); origin != "" {
+			// Carry the sub-path prefix from the page origin so a sub-path
+			// deployment (e.g. /weknora/) keeps its prefix in the pairing link.
+			// requestHTTPOrigin builds from r.Host, which never carries a path.
+			if pageURL, perr := url.Parse(page); perr == nil {
+				if trimmed := strings.TrimRight(pageURL.Path, "/"); trimmed != "" {
+					return origin + trimmed
+				}
+			}
 			return origin
 		}
 	}
@@ -97,7 +117,10 @@ func pageOriginMatchingHost(page, requestHost string) (string, bool) {
 	if reqName == "" || !strings.EqualFold(u.Hostname(), reqName) {
 		return "", false
 	}
-	return u.Scheme + "://" + u.Host, true
+	// Preserve the path so a sub-path deployment (e.g. /weknora/) keeps its
+	// prefix in the pairing link. A trailing slash is trimmed so the origin
+	// is canonical; pairingURL appends the API path regardless.
+	return u.Scheme + "://" + u.Host + strings.TrimRight(u.Path, "/"), true
 }
 
 func isHTTPOrigin(page string) bool {

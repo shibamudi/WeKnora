@@ -58,6 +58,28 @@ func TestPairingOriginIgnoresForeignHostOnLoopback(t *testing.T) {
 	require.Equal(t, "http://weknora.example", pairingOrigin(req, "https://evil.example"))
 }
 
+func TestPairingOriginPreservesSubPathPrefix(t *testing.T) {
+	req := httptest.NewRequest("POST", "https://weknora.example/weknora/api/v1/me/browser", nil)
+	req.Host = "weknora.example"
+
+	require.Equal(t, "https://weknora.example/weknora", pairingOrigin(req, "https://weknora.example/weknora"))
+	require.Equal(t, "https://weknora.example/weknora", pairingOrigin(req, "https://weknora.example/weknora/"))
+
+	req.Host = "other.example"
+	require.Equal(t, "https://other.example/weknora", pairingOrigin(req, "https://weknora.example/weknora"))
+}
+
+func TestPairingOriginLoopbackBehindProxyPreservesPrefixAndScheme(t *testing.T) {
+	req := httptest.NewRequest("POST", "https://localhost/weknora/api/v1/me/browser", nil)
+	req.Host = "localhost"
+	req.Header.Set("X-Forwarded-Proto", "https")
+
+	require.Equal(t, "https://localhost/weknora", pairingOrigin(req, "https://localhost/weknora"))
+
+	req.Header.Del("X-Forwarded-Proto")
+	require.Equal(t, "http://localhost/weknora", pairingOrigin(req, "http://localhost/weknora"))
+}
+
 func TestBrowserAccountRequiresUser(t *testing.T) {
 	h := &Handler{browserSkill: browserskill.NewManager()}
 	response := httptest.NewRecorder()
