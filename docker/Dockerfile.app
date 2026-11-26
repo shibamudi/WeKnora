@@ -57,24 +57,48 @@ RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY cmd/download cmd/download
 RUN go run cmd/download/duckdb/duckdb.go
 
-# Copy anydoc source + build script before COPY . . so that the Rust
-# toolchain install + anydoc compilation layer is cached independently
-# of WeKnora source changes. Without this reorder, every .go file edit
-# invalidates the 27-minute Rust download + build layer.
-COPY scripts/build-anydoc-lib.sh ./scripts/build-anydoc-lib.sh
-COPY third_party/anydoc-go ./third_party/anydoc-go
-
+# Rust toolchain config — must precede the toolchain install RUN below.
 ARG WITH_ANYDOC=1
 ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo
 ENV RUSTUP_DIST_SERVER=https://mirrors.tuna.tsinghua.edu.cn/rustup
 ENV PATH=/usr/local/cargo/bin:$PATH
+
+# Install rustup + stable toolchain as its own layer, BEFORE copying
+# build-anydoc-lib.sh or anydoc source. This isolates the toolchain
+# download from changes to the build script or anydoc source: the layer
+# only rebuilds when the golang base or apt layer changes.
+#
+# NOTE: do NOT add --mount=type=cache,target=/usr/local/rustup here.
+# Cache-mount contents are excluded from the image layer, so the toolchain
+# would not be visible to the cargo build RUN below (which does not mount
+# /usr/local/rustup), causing "rustup could not choose a version of rustc
+# to run". The toolchain must live in the layer itself; layer-level caching
+# is what keeps the download from repeating.
+#
+# Previously the toolchain install and the anydoc build shared a single
+# RUN placed after COPY build-anydoc-lib.sh, so every edit to that script
+# (or anydoc-go/Cargo.lock) invalidated the layer and re-downloaded rustup.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     if [ "$WITH_ANYDOC" = "1" ]; then \
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
             | sh -s -- -y --profile minimal --default-toolchain stable && \
         mkdir -p /usr/local/cargo && \
-        printf '[source.crates-io]\nreplace-with = "rsproxy-sparse"\n[source.rsproxy-sparse]\nregistry = "sparse+https://rsproxy.cn/index/"\n[net]\ngit-fetch-with-cli = true\n' > /usr/local/cargo/config.toml && \
+        printf '[source.crates-io]\nreplace-with = "rsproxy-sparse"\n[source.rsproxy-sparse]\nregistry = "sparse+https://rsproxy.cn/index/"\n[net]\ngit-fetch-with-cli = true\n' > /usr/local/cargo/config.toml; \
+    fi
+
+# Copy anydoc source + build script AFTER the toolchain install so that
+# changes here only invalidate the compilation RUN below, not the
+# toolchain download layer above.
+COPY scripts/build-anydoc-lib.sh ./scripts/build-anydoc-lib.sh
+COPY third_party/anydoc-go ./third_party/anydoc-go
+
+# Build the anydoc Rust library. Invalidated only when build-anydoc-lib.sh
+# or anydoc-go changes; crate downloads are served from the cargo cache
+# mounts so repeated builds skip re-fetching dependencies.
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    if [ "$WITH_ANYDOC" = "1" ]; then \
         CARGO_PROFILE_RELEASE_LTO=off ./scripts/build-anydoc-lib.sh; \
     fi
 
